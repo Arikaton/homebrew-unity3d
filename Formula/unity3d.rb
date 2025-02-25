@@ -1,9 +1,9 @@
 class Unity3d < Formula
   desc "CLI tool for launching Unity projects with version detection"
   homepage "https://github.com/Arikaton/homebrew-unity3d"
-  url "https://raw.githubusercontent.com/Arikaton/homebrew-unity3d/main/unity3d"
+  url "https://github.com/Arikaton/homebrew-unity3d/releases/download/v1.0.0/unity3d-1.0.0.tar.gz"
   version "1.0.0"
-  sha256 "53a166b8096e35ead4f80aee4c5f74d2f0307266c5f0cbfb28dfc73cd9de7905"
+  sha256 "a36765c619a986671da6d8cde08a341d74d64e7989b4ed36a9d24845a73b6950"
 
   def install
     bin.install "unity3d"
