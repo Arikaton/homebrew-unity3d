@@ -7,14 +7,13 @@ class Unity3d < Formula
 
   def install
     bin.install "unity3d"
-    bash_completion.install "unity3d-completion.zsh"
     zsh_completion.install "unity3d-completion.zsh"
   end
 
   def caveats
     <<~EOS
       To enable auto-completion, add this to your shell profile:
-        source #{HOMEBREW_PREFIX}/etc/bash_completion.d/unity3d-completion.zsh
+        source #{HOMEBREW_PREFIX}/share/zsh/site-functions/_unity3d
     EOS
   end
 
