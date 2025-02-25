@@ -7,7 +7,7 @@ class Unity3d < Formula
 
   def install
     bin.install "unity3d"
-    zsh_completion.install "unity3d-completions.zsh"
+    zsh_completion.install "unity3d-completion.zsh"
   end
 
   def caveats
