@@ -1,0 +1,165 @@
+#!/bin/zsh
+
+# Required variables:
+# UNITY_INSTALLATION_PREFIX - Custom path where different Unity3D versions are stored.
+# UNITY_CODE_EDITOR - The code editor to open Unity projects.
+
+LOG_FILE="$HOME/.unity-launcher.log"
+VERSION_REGEX="^[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9]+$"
+
+HELP_MESSAGE="\
+Usage: $0 [options] <project_path>
+
+Options:
+  -f <version>  Use a specific Unity version.
+  -d            Use default Unity version (\$UNITY_DEFAULT_VERSION).
+  -b            Open Unity Hub.
+  -e            Open both Unity and the assigned code editor.
+  -c <args>     Run Unity in batch mode with arguments.
+  -h            Show this help message.
+
+If no options are provided, the Unity version from ProjectVersion.txt is used by default."
+
+function log_message() {
+    echo "$(date) - $1" >> "$LOG_FILE"
+}
+
+function open_hub() {
+    log_message "Opening Unity Hub..."
+    case "$OSTYPE" in
+        darwin*) open -a "Unity Hub.app" ;;
+        msys*) start "" "C:\\Program Files\\Unity Hub\\Unity Hub.exe" ;;
+        *) echo "Opening Unity Hub is not supported on this OS." && exit 1 ;;
+    esac
+    exit 0
+}
+
+function show_help_message() {
+    echo "$HELP_MESSAGE"
+    exit 0
+}
+
+function open_code_editor() {
+    if [[ -n $UNITY_CODE_EDITOR && -n $PROJECT_PATH ]]; then
+        log_message "Opening code editor: $UNITY_CODE_EDITOR"
+        "$UNITY_CODE_EDITOR" "$PROJECT_PATH/$(basename "$(realpath "$PROJECT_PATH")").sln"
+    fi
+}
+
+function list_unity_versions() {
+    ls "$UNITY_INSTALLATION_PREFIX" | grep -E "$VERSION_REGEX"
+}
+
+function select_unity_version() {
+    echo "Select Unity version:"
+    list_unity_versions | nl -w2 -s'. '  # Numbered list
+    read -p "Enter the number of your choice: " CHOICE
+    UNITY_VERSION=$(list_unity_versions | sed -n "${CHOICE}p")
+
+    if [[ -z "$UNITY_VERSION" ]]; then
+        echo "Invalid selection."
+        exit 1
+    fi
+}
+
+# Initialize variables
+UNITY_VERSION=""
+OPEN_EDITOR=false
+BATCH_MODE=false
+ARGUMENTS=""
+PROJECT_PATH=""
+HAS_OPTIONS=false  # Track if any options were provided
+
+# Parse options
+while getopts ":dhebc:p:f:" OPTION; do
+    HAS_OPTIONS=true  # Mark that an option was provided
+    case "$OPTION" in
+        f)
+            if [[ "$OPTARG" =~ $VERSION_REGEX ]]; then
+                UNITY_VERSION="$OPTARG"
+            else
+                echo "Invalid Unity version format: $OPTARG"
+                exit 1
+            fi
+            ;;
+        d) UNITY_VERSION="$UNITY_DEFAULT_VERSION" ;;
+        h) show_help_message ;;
+        b) open_hub ;;
+        e) OPEN_EDITOR=true ;;
+        c)
+            BATCH_MODE=true
+            ARGUMENTS="$OPTARG"
+            ;;
+        *) echo "Unknown option: -$OPTION"; show_help_message ;;
+    esac
+done
+
+shift $((OPTIND - 1))
+PROJECT_PATH="$1"
+
+# If no project path is given, open Unity Hub
+if [[ -z $PROJECT_PATH ]]; then
+    echo "No project path provided. Opening Unity Hub..."
+    open_hub
+fi
+
+# Validate project path
+if [[ ! -d $PROJECT_PATH ]]; then
+    echo "Error: Invalid or missing project path."
+    show_help_message
+fi
+
+# If no Unity version was provided via options, extract it from ProjectVersion.txt
+if [[ -z $UNITY_VERSION ]]; then
+    UNITY_VERSION=$(awk -F ' ' '/m_EditorVersion:/ {print $2}' "$PROJECT_PATH/ProjectSettings/ProjectVersion.txt" | tr -d '[:space:]')
+
+    if [[ -z $UNITY_VERSION || ! "$UNITY_VERSION" =~ $VERSION_REGEX ]]; then
+        echo "Error: Unable to determine Unity version from ProjectVersion.txt"
+        echo "Falling back to installed versions..."
+        select_unity_version
+    fi
+fi
+
+# Set installation paths based on OS
+case "$OSTYPE" in
+    darwin*)
+        INSTALLATION_PATH_PREFIX=${UNITY_INSTALLATION_PREFIX:-"/Applications/Unity/Hub/Editor"}
+        INSTALLATION_PATH_POSTFIX="Unity.app/Contents/MacOS/Unity"
+        ;;
+    msys*)
+        INSTALLATION_PATH_PREFIX=${UNITY_INSTALLATION_PREFIX:-"C:\\Program Files\\Unity\\Hub\\Editor"}
+        INSTALLATION_PATH_POSTFIX="Editor\\Unity.exe"
+        ;;
+    *)
+        echo "Error: Unsupported OS."
+        exit 1
+        ;;
+esac
+
+UNITY_EXECUTABLE="$INSTALLATION_PATH_PREFIX/$UNITY_VERSION/$INSTALLATION_PATH_POSTFIX"
+
+# Check if Unity executable exists
+if [[ ! -f $UNITY_EXECUTABLE ]]; then
+    echo "Error: Unity version $UNITY_VERSION not found at expected location: $UNITY_EXECUTABLE"
+    exit 1
+fi
+
+# If no options were provided, default to opening Unity and the code editor (-e)
+if [[ $HAS_OPTIONS == false ]]; then
+    OPEN_EDITOR=true
+fi
+
+# Launch Unity with or without batch mode
+log_message "Launching Unity version: $UNITY_VERSION"
+log_message "Project path: $PROJECT_PATH"
+
+if [[ $BATCH_MODE == true ]]; then
+    nohup "$UNITY_EXECUTABLE" -projectPath "$PROJECT_PATH" -batchmode $ARGUMENTS >/dev/null 2>&1 &
+else
+    nohup "$UNITY_EXECUTABLE" -projectPath "$PROJECT_PATH" >/dev/null 2>&1 &
+fi
+
+# Open the code editor if requested
+if [[ $OPEN_EDITOR == true ]]; then
+    open_code_editor
+fi
